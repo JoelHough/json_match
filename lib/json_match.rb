@@ -1,41 +1,63 @@
 require 'rspec'
 
-RSpec::Matchers.define :json_match do |expected|
-  match do |actual|
-    JsonMatch::match(actual, expected)
-  end
-end
-
 module JsonMatch
-  def self.match(actual, expected)
-    unless expected.is_a? Hash
-      if expected.respond_to?(:call)
-        expected.call(actual)
-      else
-        expected == actual
+  class JsonMatcher
+    include RSpec::Matchers
+
+    def initialize(expected)
+      @expected = expected
+    end
+
+    def matches?(actual)
+      @actual = actual
+      begin
+        recursive_check(@actual, @expected, false)
+      rescue RSpec::Expectations::ExpectationNotMetError => e
+        @failure_message = e
+        false
       end
-    else
-      explicit_keys = expected.keys.reject{|k| k.respond_to?(:call)}
-      return false if explicit_keys.any? && explicit_keys.to_set != actual.keys.to_set
-      expected.keys.all? do |expected_key|
-        unless expected_key.respond_to? :call
-          actual.has_key?(expected_key) && match(actual[expected_key], expected[expected_key])
-        else
-          expected_key.call(actual, expected[expected_key])
-        end
+    end
+
+    def failure_message_for_should
+      @failure_message || "expected #{@actual.inspect} to match #{@expected.inspect}"
+    end
+
+    def failure_message_for_should_not
+      "expected #{@actual.inspect} not to match #{@expected.inspect}"
+    end
+
+    def recursive_check(actual, expected, exact)
+      return instance_exec(actual, &expected) if expected.is_a?(Proc)
+
+      return actual.should == expected if !actual.is_a?(Hash)
+
+      expected.should be_kind_of(Hash), "expected #{actual.inspect} to match #{expected.inspect}"
+
+      if exact
+        (actual.keys.sort == expected.keys.map(&:to_s).sort).should be_true, "expected #{actual.inspect} to have only the keys #{expected.keys.map(&:to_s).inspect}"
+      else
+        (expected.keys.map(&:to_s) - actual.keys).should be_empty, "expected #{actual.inspect} to include the keys #{expected.keys.map(&:to_s).inspect}"
+      end
+
+      expected.keys.each do |k|
+        recursive_check(actual[k.to_s], expected[k], exact)
       end
     end
   end
 
-  def exactly(expected_value=nil)
-    if expected_value
-      proc do |actual|
-        JsonMatch::match(actual, expected_value)
-      end
-    else
-      proc do |actual, expected|
-        JsonMatch::match(actual, expected)
-      end
-    end
+  def json_match(expected)
+    JsonMatcher.new(expected)
+  end
+
+  def include_json(expected)
+    ->(actual) {recursive_check(actual, expected, false)}
+  end
+
+  def exact_json(expected)
+    ->(actual) {recursive_check(actual, expected, true)}
+  end
+
+  def any_json
+    ->(actual) {true}
   end
 end
