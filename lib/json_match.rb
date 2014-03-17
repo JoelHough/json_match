@@ -28,19 +28,26 @@ module JsonMatch
 
     def recursive_check(actual, expected, exact)
       return instance_exec(actual, &expected) if expected.is_a?(Proc)
+      expected.should be_kind_of(actual.class), "expected #{actual.inspect} to match #{expected.inspect}"
+      case actual
+      when Array
+        actual.length.should equal(expected.length), "expected #{actual.inspect} to be the same length as #{expected.inspect}"
 
-      return actual.should == expected if !actual.is_a?(Hash)
+        expected.each_index do |i|
+          recursive_check(actual[i], expected[i], exact)
+        end
+      when Hash
+        if exact
+          (actual.keys.sort == expected.keys.map(&:to_s).sort).should be_true, "expected #{actual.inspect} to have only the keys #{expected.keys.map(&:to_s).inspect}"
+        else
+          (expected.keys.map(&:to_s) - actual.keys).should be_empty, "expected #{actual.inspect} to include the keys #{expected.keys.map(&:to_s).inspect}"
+        end
 
-      expected.should be_kind_of(Hash), "expected #{actual.inspect} to match #{expected.inspect}"
-
-      if exact
-        (actual.keys.sort == expected.keys.map(&:to_s).sort).should be_true, "expected #{actual.inspect} to have only the keys #{expected.keys.map(&:to_s).inspect}"
+        expected.keys.each do |k|
+          recursive_check(actual[k.to_s], expected[k], exact)
+        end
       else
-        (expected.keys.map(&:to_s) - actual.keys).should be_empty, "expected #{actual.inspect} to include the keys #{expected.keys.map(&:to_s).inspect}"
-      end
-
-      expected.keys.each do |k|
-        recursive_check(actual[k.to_s], expected[k], exact)
+        actual.should == expected
       end
     end
   end

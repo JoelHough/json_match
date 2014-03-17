@@ -6,10 +6,11 @@ describe 'JsonMatch' do
   describe "json_match" do
     it "matches trivial equality" do
       {}.should json_match({})
+      [].should json_match([])
     end
 
     it "doesn't match trivial inequality" do
-      {}.should_not json_match(5)
+      {}.should_not json_match([])
     end
 
     it "doesn't match an inequal hash" do
@@ -25,6 +26,18 @@ describe 'JsonMatch' do
       {'a' => {'b' => 1, 'c' => 2}}.should json_match({'a' => {'b' => ->(v) {v.should_not == 2}}})
       {'a' => {'b' => 1, 'c' => 2}}.should_not json_match({'a' => {'b' => ->(v) {v.should == 2}}})
       {'a' => {'b' => 1, 'c' => 2}}.should_not json_match({'a' => {'b' => ->(v) {v.should_not == 1}}})
+    end
+
+    it "matches arrays" do
+      {'a' => [{'b' => 1, 'c' => 2}, 3]}.should json_match({'a' => [{'b' => 1}, 3]})
+    end
+
+    it "doesn't match differently sized arrays" do
+      [1, 2, 3].should_not json_match([1, 2])
+    end
+
+    it "calls a proc array value with the actual value at that point" do
+      [1, 2, 3].should json_match([1, ->(n) {true}, ->(n) {n.should == 3}])
     end
   end
 
